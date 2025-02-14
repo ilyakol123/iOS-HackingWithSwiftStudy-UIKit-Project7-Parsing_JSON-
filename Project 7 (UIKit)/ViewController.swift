@@ -16,33 +16,38 @@ class ViewController: UITableViewController {
         super.viewDidLoad()
         
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .bookmarks, target: self, action: #selector(showCredits))
-        let urlString: String
-        
-        //navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: UIBarButtonItem.SystemItem.search, target: self, action: #selector(findPetition))
-        
         navigationItem.leftBarButtonItems = [ UIBarButtonItem(barButtonSystemItem: UIBarButtonItem.SystemItem.refresh, target: self, action: #selector(resetSearch)),UIBarButtonItem(barButtonSystemItem: UIBarButtonItem.SystemItem.search, target: self, action: #selector(findPetition)) ]
         
+        
+        performSelector(inBackground: #selector(fetchJSON), with: nil)
+    }
+    
+    @objc func fetchJSON() {
+        let urlString: String
         if navigationController?.tabBarItem.tag == 0 {
             urlString = "https://www.hackingwithswift.com/samples/petitions-1.json"
         } else {
             urlString = "https://www.hackingwithswift.com/samples/petitions-2.json"
         }
         
-        if let url = URL(string: urlString) {
-            if let data = try? Data(contentsOf: url) {
-                parse(json: data)
-                return
+            if let url = URL(string: urlString) {
+                if let data = try? Data(contentsOf: url) {
+                    parse(json: data)
+                    return
+                }
             }
-        }
-        showError()
+        performSelector(onMainThread: #selector(showError), with: nil, waitUntilDone: false)
     }
     
     func parse(json: Data) {
         let decoder = JSONDecoder()
+        
         if let jsonPetitions = try? decoder.decode(Petitions.self, from: json) {
             petitions = jsonPetitions.results
             originalPetitions = petitions
-            tableView.reloadData()
+            tableView.performSelector(onMainThread: #selector(UITableView.reloadData), with: nil, waitUntilDone: false)
+        } else {
+            performSelector(onMainThread: #selector(showError), with: nil, waitUntilDone: false)
         }
     }
     
@@ -63,10 +68,10 @@ class ViewController: UITableViewController {
         navigationController?.pushViewController(vc, animated: true)
     }
     
-    func showError() {
-        let ac = UIAlertController(title: "Loading error", message: "Loading problems occurred", preferredStyle: .alert)
-        ac.addAction(UIAlertAction(title: "OK", style: .default))
-        present(ac, animated: true)
+    @objc func showError() {
+            let ac = UIAlertController(title: "Loading error", message: "Loading problems occurred", preferredStyle: .alert)
+            ac.addAction(UIAlertAction(title: "OK", style: .default))
+            present(ac, animated: true)
     }
     
     @objc func showCredits() {
@@ -88,9 +93,17 @@ class ViewController: UITableViewController {
     }
     
     func search(_ keyword: String) {
-        let filteredPetitions = petitions.filter { $0.title.lowercased().contains(keyword.lowercased()) }
-        petitions = filteredPetitions
-        tableView.reloadData()
+        
+        DispatchQueue.global().async {
+            let filteredPetitions = self.petitions.filter { $0.title.lowercased().contains(keyword.lowercased()) }
+            self.petitions = filteredPetitions
+        }
+        
+        DispatchQueue.main.async {
+            self.tableView.reloadData()
+        }
+        
+        
     }
     
     @objc func resetSearch() {
